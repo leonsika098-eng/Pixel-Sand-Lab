@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Pixel Sand Lab — Sand Physics Game</title>
+<meta name="description" content="Pixel Sand Lab — браузерна пісочна фізики з піском, водою, вогнем, льодом, лавою та кислотами. Грай прямо в браузері.">
+<meta name="keywords" content="Pixel Sand, Sand Game, Sandbox Physics, Pixel Sand Lab, sand simulation, powder game">
+<meta name="author" content="Lev Kulachkovskyi">
+<style>
+body { margin:0; background:#111; color:white; text-align:center; font-family:sans-serif; }
+canvas { image-rendering:pixelated; border:2px solid #444; display:block; margin:0 auto; touch-action:none;}
+button { margin:2px; padding:5px 8px; font-size:14px; }
+input { margin:5px; }
+</style>
+</head>
+<body>
+
+<h3>🧪 Pixel Sand Lab++ Ultimate v2 🌈🔥💦🧊🧪</h3>
+
+<!-- Матеріали -->
+<button onclick="setMat(1)">🟨 Пісок</button>
+<button onclick="setMat(2)">🟦 Вода</button>
+<button onclick="setMat(3)">⬛ Камінь</button>
+<button onclick="setMat(4)">🔥 Вогонь</button>
+<button onclick="setMat(5)">🌋 Лава</button>
+<button onclick="setMat(6)">🧪 Розчин</button>
+<button onclick="setMat(16)">🟩 Кислота</button>
+<button onclick="setMat(7)">🪶 Пепел</button>
+<button onclick="setMat(8)">🪟 Скло</button>
+<button onclick="setMat(9)">💣 Детонатор</button>
+<button onclick="setMat(10)">🌈 Перелив</button>
+<button onclick="setMat(14)">🌈 РАДУГА</button>
+<button onclick="setMat(11)">🐜 Терміт</button>
+<button onclick="setMat(12)">🧱 Кирпич</button>
+<button onclick="setMat(13)"># Сітка</button>
+<button onclick="setMat(15)">💦 ФОНТАН</button>
+<button onclick="setMat(18)">🌸 Лодір Розрвий</button>
+<button onclick="setMat(19)">🧊 Лід</button>
+<button onclick="setMat(0)">🌀 Стиралка</button>
+<button onclick="clearWorld()">🧹 Очистити</button>
+<br>
+Розмір кисті: <input type="range" min="1" max="6" value="2" id="brushRange">
+
+<canvas id="c"></canvas>
+
+<script>
+const W=160,H=100,S=4;
+const c=document.getElementById("c");
+c.width=W;c.height=H;
+c.style.width=W*S+"px"; c.style.height=H*S+"px";
+const ctx=c.getContext("2d");
+
+let w=new Uint8Array(W*H);
+let life=new Uint16Array(W*H);
+let hue=new Uint16Array(W*H);
+let mat=1;
+let brushSize=2;
+
+const I=(x,y)=>x+y*W;
+const rnd=()=>Math.random()<0.5?-1:1;
+
+document.getElementById("brushRange").addEventListener("input",e=>{
+ brushSize=parseInt(e.target.value);
+});
+
+function setMat(m){mat=m;}
+function clearWorld(){w.fill(0);life.fill(0);hue.fill(0);}
+
+c.addEventListener("pointermove",e=>{
+ if(!e.buttons)return;
+ const r=c.getBoundingClientRect();
+ const x=Math.floor((e.clientX-r.left)/S);
+ const y=Math.floor((e.clientY-r.top)/S);
+ for(let dx=-brushSize;dx<=brushSize;dx++)
+  for(let dy=-brushSize;dy<=brushSize;dy++){
+   const nx=x+dx, ny=y+dy;
+   if(nx>=0&&ny>=0&&nx<W&&ny<H){
+    w[I(nx,ny)]=mat;
+    if(mat===4) life[I(nx,ny)]=40 + Math.floor(Math.random()*10); // вогонь довше
+    if(mat===7) life[I(nx,ny)]=200;
+    if(mat===10 || mat===14) hue[I(nx,ny)]=Math.random()*360;
+    if(mat===11) life[I(nx,ny)]=1;
+    if(mat===16) life[I(nx,ny)]=50;
+   }
+  }
+});
+
+function swap(a,b){
+ const t=w[a]; w[a]=w[b]; w[b]=t;
+ const l=life[a]; life[a]=life[b]; life[b]=l;
+ const h=hue[a]; hue[a]=hue[b]; hue[b]=h;
+}
+
+function explode(x,y){
+ for(let dy=-3;dy<=3;dy++)
+  for(let dx=-3;dx<=3;dx++){
+   const nx=x+dx, ny=y+dy;
+   if(nx<0||ny<0||nx>=W||ny>=H) continue;
+   const i=I(nx,ny);
+   if(Math.random()<0.7){ w[i]=4; life[i]=15 + Math.floor(Math.random()*5); }
+  }
+}
+
+function update(){
+ for(let y=H-2;y>=1;y--){
+  for(let x=1;x<W-1;x++){
+   const i=I(x,y), d=I(x,y+1), u=I(x,y-1);
+
+   // Пісок
+   if(w[i]===1){ if(w[d]===0||w[d]===2) swap(i,d); else{ const ni=I(x+rnd(),y+1); if(w[ni]===0||w[ni]===2) swap(i,ni); } }
+
+   // Вода
+   if(w[i]===2){ if(w[d]===0) swap(i,d); else if(Math.random()<0.7){ const ni=I(x+rnd(),y); if(w[ni]===0) swap(i,ni); } }
+
+   // Вогонь (летючий вверх)
+   if(w[i]===4){
+    life[i]--;
+    if(life[i]<=0){ w[i]=0; continue; }
+    const up = I(x, y-1);
+    if(up>=0 && w[up]===0) swap(i,up);
+    if(Math.random()<0.3){ const side=I(x+rnd(),y+rnd()); if(w[side]===0) swap(i,side); }
+   }
+
+   // Лава
+   if(w[i]===5){
+    if([w[u],w[d],w[i-1],w[i+1]].includes(2)){ w[i]=3; if(u>=0) w[u]=7; continue; }
+    if(w[d]===0) swap(i,d);
+    else{ let nx=x+rnd(), ni=I(nx,y); if(w[ni]===0) swap(i,ni); }
+   }
+
+   // Кислота
+   if(w[i]===16){
+     if([w[u],w[d],w[i-1],w[i+1]].some(v=>v>0 && v!==16)) w[i]=0;
+     if(w[d]===0) swap(i,d); else if(Math.random()<0.6){ const ni=I(x+rnd(),y); if(w[ni]===0) swap(i,ni); }
+   }
+
+   // Розчин
+   if(w[i]===6){ const ni=I(x+rnd(),y+rnd()); if(w[ni]!==0 && w[ni]!==6 && Math.random()<0.2) w[ni]=0; if(w[d]===0) swap(i,d); }
+
+   // Пепел
+   if(w[i]===7){ life[i]--; if(life[i]<=0){ w[i]=0; continue; } if(w[d]===0 && Math.random()<0.2) swap(i,d); }
+
+   // Скло
+   if(w[i]===8){}
+
+   // Детонатор
+   if(w[i]===9){ if([w[u],w[d],w[i-1],w[i+1]].includes(4)||[w[u],w[d],w[i-1],w[i+1]].includes(5)){ w[i]=0; explode(x,y); } }
+
+   // Перелив
+   if(w[i]===10){ hue[i]+=2; if(hue[i]>360) hue[i]-=360; if(w[d]===0) swap(i,d); else if(Math.random()<0.3){ const ni=I(x+rnd(),y); if(w[ni]===0) swap(i,ni); } }
+
+   // РАДУГА
+   if(w[i]===14){ hue[i]+=2; if(hue[i]>360) hue[i]-=360; 
+     if([w[u],w[d],w[i-1],w[i+1]].some(v=>v>0 && v!==10 && v!==14)) w[i]=0;
+   }
+
+   // Терміти
+   if(w[i]===11){
+     const dx=rnd(), dy=rnd();
+     const ni=I(Math.min(W-1,Math.max(0,x+dx)),Math.min(H-1,Math.max(0,y+dy)));
+     if(w[ni]===0) swap(i,ni);
+     // Съедают материалы
+     if([w[u],w[d],w[i-1],w[i+1]].some(v=>v>0 && v!==11)) w[i]=w[i];
+   }
+
+   // Кирпич (12) статичный бело-серый
+   if(w[i]===12){}
+
+   // Сітка (13) статичная белая
+   if(w[i]===13){}
+
+   // ФОНТАН
+   if(w[i]===15){
+     const angle=Math.PI/4 + Math.random()*(Math.PI/2); 
+     const nx=Math.min(W-1,Math.max(0,x+Math.round(Math.cos(angle))));
+     const ny=Math.min(H-1,Math.max(0,y-Math.round(Math.sin(angle))));
+     const ni=I(nx,ny);
+     if(w[ni]===0) w[ni]=2;
+   }
+
+   // Лодір Розрвий (18) розовый терміт, размножается
+   if(w[i]===18){
+     const dx=rnd(), dy=rnd();
+     const ni=I(Math.min(W-1,Math.max(0,x+dx)),Math.min(H-1,Math.max(0,y+dy)));
+     if(w[ni]===0) w[ni]=18;
+     // распространяется при контакте
+     if([w[u],w[d],w[i-1],w[i+1]].some(v=>v>0 && v!==18)) w[i]=18;
+   }
+
+   // Лід (19)
+   if(w[i]===19){
+     if([w[u],w[d],w[i-1],w[i+1]].includes(4) || [w[u],w[d],w[i-1],w[i+1]].includes(5)){ w[i]=2; } // тает в воду от огня или лавы
+     if([w[u],w[d],w[i-1],w[i+1]].includes(2) && Math.random()<0.01){ w[i]=2; } // медленно тает в воде
+   }
+
+  }
+ }
+}
+
+function draw(){
+ const img=ctx.createImageData(W,H);
+ for(let i=0;i<w.length;i++){
+  const p=i*4;
+  if(w[i]===1){img.data[p]=220;img.data[p+1]=190;img.data[p+2]=60;} // песок
+  if(w[i]===2){img.data[p]=60;img.data[p+1]=120;img.data[p+2]=220;} // вода
+  if(w[i]===3){img.data[p]=110;img.data[p+1]=110;img.data[p+2]=110;} // камень
+  if(w[i]===4){img.data[p]=255;img.data[p+1]=120;img.data[p+2]=40;} // огонь вверх
+  if(w[i]===5){img.data[p]=255;img.data[p+1]=70;img.data[p+2]=20;} // лава
+  if(w[i]===6){img.data[p]=210;img.data[p+1]=200;img.data[p+2]=160;} // раствор
+  if(w[i]===7){img.data[p]=160;img.data[p+1]=160;img.data[p+2]=160;} // пепел
+  if(w[i]===8){img.data[p]=100;img.data[p+1]=180;img.data[p+2]=220;} // стекло
+  if(w[i]===9){img.data[p]=255;img.data[p+1]=0;img.data[p+2]=0;} // детонатор
+  if(w[i]===10){ const col=hue[i]; const rgb=hslToRgb(col/360,0.8,0.5); img.data[p]=rgb[0]; img.data[p+1]=rgb[1]; img.data[p+2]=rgb[2]; } // перелив
+  if(w[i]===11){img.data[p]=100;img.data[p+1]=60;img.data[p+2]=20;} // терміт
+  if(w[i]===12){img.data[p]=200;img.data[p+1]=200;img.data[p+2]=200;} // кирпич бело-серый
+  if(w[i]===13){img.data[p]=255;img.data[p+1]=255;img.data[p+2]=255;} // сетка белая
+  if(w[i]===14){ const col=hue[i]; const rgb=hslToRgb(col/360,0.8,0.6); img.data[p]=rgb[0]; img.data[p+1]=rgb[1]; img.data[p+2]=rgb[2]; } // радуга
+  if(w[i]===15){img.data[p]=100;img.data[p+1]=220;img.data[p+2]=180;} // фонтан
+  if(w[i]===16){img.data[p]=0; img.data[p+1]=255; img.data[p+2]=0;} // кислота
+  if(w[i]===18){img.data[p]=255;img.data[p+1]=100;img.data[p+2]=180;} // розовый терміт
+  if(w[i]===19){img.data[p]=180;img.data[p+1]=240;img.data[p+2]=255;} // лед
+  img.data[p+3]=255;
+ }
+ ctx.putImageData(img,0,0);
+}
+
+function hslToRgb(h,s,l){
+ let r,g,b;
+ if(s===0){ r=g=b=l*255; return [r,g,b]; }
+ const q=l<0.5? l*(1+s) : l+s-l*s;
+ const p=2*l-q;
+ r=hue2rgb(p,q,h+1/3); g=hue2rgb(p,q,h); b=hue2rgb(p,q,h-1/3);
+ return [r*255,g*255,b*255];
+}
+function hue2rgb(p,q,t){ if(t<0)t+=1; if(t>1)t-=1; if(t<1/6)return p+(q-p)*6*t; if(t<1/2)return q; if(t<2/3)return p+(q-p)*(2/3-t)*6; return p; }
+
+(function loop(){ update(); draw(); requestAnimationFrame(loop); })();
+</script>
+
+</body>
+  </html>
